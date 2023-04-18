@@ -12,6 +12,9 @@ int main(){
     int N = 10
     int* A = new int*[N*N]
 
+    cout << "veo si funciona" << endl;
+
+
     for(int i = 0, i < N, i++){
         for(int j = 0, j < N, j++){
             A[i + N*j] = i + N*j;

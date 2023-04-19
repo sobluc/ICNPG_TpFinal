@@ -2,26 +2,34 @@
 
 using namespace std;
 
-void funcion(int** matriz, int N){
-
-
+void productoMatricial(int* A, int* B, int N){
+    for(int i = 0; i < N ; i++){
+        for(int j = 0; j < N ; j++){
+            cout << endl;
+        }
+    }
 }
 
 
 int main(){
-    int N = 10
-    int* A = new int*[N*N]
+    int N = 4;
+    int* A = new int [N*N];
+    int* B = new int [N*N];
 
-    cout << "veo si funciona" << endl;
 
-
-    for(int i = 0, i < N, i++){
-        for(int j = 0, j < N, j++){
-            A[i + N*j] = i + N*j;
+    for(int i = 0; i < N; i++){
+        for(int j = 0; j < N; j++){
+            A[i + N*j] = i + N*j; 
         }
     }  
 
-    delete A[]
+    for(int i = 0; i < N; i++){
+        for(int j = 0; j < N; j++){
+            B[i + N*j] = -1; 
+        }
+    }
+
+    delete [] A;
 
     return 0;
 }

@@ -7,8 +7,8 @@ using namespace std;
 
 
 
-void productoMatricial(int* A, int* B, int N){
-    int* C = new int [N*N];
+void productoMatricial(int* A, int* B, int* C, int N){
+
     for(int i = 0; i < N ; i++){
         for(int j = 0; j < N ; j++){
             int column_row_sum = 0;
@@ -20,18 +20,6 @@ void productoMatricial(int* A, int* B, int N){
         }
     }
 
-    for(int i = 0; i < N ; i++){
-        for(int j = 0; j < N ; j++){
-            if(j == 0) cout << "[" ;
-
-            if(j + 1 == N) cout << C[N*i + j] << "]" << endl;            
-            else  cout << C[N*i + j] << '\t';
-            
- 
-        }
-    }    
-
-    delete[] C;
 }
 
 
@@ -39,24 +27,23 @@ int main(){
     int N = 4;
     int* A = new int [N*N];
     int* B = new int [N*N];
-
+    int* C = new int [N*N];
 
     for(int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             A[N * i + j] =  N * i + j + 1; 
-        }
-    }  
 
-    for(int i = 0; i < N; i++){
-        for(int j = 0; j < N; j++){
             if (i == j) B[N * i + j] = -1; 
             else  B[N * i + j] = 0;
-        }
-    }
 
-    productoMatricial(A, B, N);
+            C[N*i + j] = 0;
+
+        }
+    }  
+    productoMatricial(A, B, C, N);
 
     delete [] A;
     delete [] B;
+    delete [] C;
     return 0;
 }

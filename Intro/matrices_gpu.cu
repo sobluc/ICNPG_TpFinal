@@ -1,62 +1,92 @@
-// Multiplicación de matrices para comparar la velocidad de corrida en cpu contra la corrida en paralelo usando cluster de GPU
+#include<stdio.h>
+#include <cuda_runtime.h>
+#include "gpu_timer.h"
+#include "cpu_timer.h"
 
-#include <iostream>
+// Matrices are stored in row-major order:
+// M(row, col) = *(M.elements + row * M.width + col)
+typedef struct {
+    int width;
+    int height;
+    float* elements;
+} Matrix;
 
-using namespace std;
+// Thread block size
+#define BLOCK_SIZE 16
 
+// Forward declaration of the matrix multiplication kernel
+__global__ void MatMulKernel(const Matrix, const Matrix, Matrix);
 
-// Multiplicacion de matrices en GPU
-__global__ void productoMatricialKernel(int* A, int* B, int* C, int N){
+// Matrix multiplication - Host code
+// Matrix dimensions are assumed to be multiples of BLOCK_SIZE
+void MatMul(const Matrix A, const Matrix B, Matrix C)
+{
+    // Load A and B to device memory
+    Matrix d_A;
+    d_A.width = A.width; d_A.height = A.height;
+    size_t size = A.width * A.height * sizeof(float);
+    cudaMalloc(&d_A.elements, size);
+    cudaMemcpy(d_A.elements, A.elements, size,
+               cudaMemcpyHostToDevice);
+    Matrix d_B;
+    d_B.width = B.width; d_B.height = B.height;
+    size = B.width * B.height * sizeof(float);
+    cudaMalloc(&d_B.elements, size);
+    cudaMemcpy(d_B.elements, B.elements, size,
+               cudaMemcpyHostToDevice);
 
+    // Allocate C in device memory
+    Matrix d_C;
+    d_C.width = C.width; d_C.height = C.height;
+    size = C.width * C.height * sizeof(float);
+    cudaMalloc(&d_C.elements, size);
+
+    // Invoke kernel
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimGrid(B.width / dimBlock.x, A.height / dimBlock.y);
+    MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
+
+    // Read C from device memory
+    cudaMemcpy(C.elements, d_C.elements, size,
+               cudaMemcpyDeviceToHost);
+
+    // Free device memory
+    cudaFree(d_A.elements);
+    cudaFree(d_B.elements);
+    cudaFree(d_C.elements);
+}
+
+// Matrix multiplication kernel called by MatMul()
+__global__ void MatMulKernel(Matrix A, Matrix B, Matrix C)
+{
+    // Each thread computes one element of C
+    // by accumulating results into Cvalue
     float Cvalue = 0;
-    int i = blockIdx.y * blockDim.y + threadIdx.y;
-    int j = blockIdx.x * blockDim.x + threadIdx.x;
-    for(int k = 0; k < N; k++){
-        Cvalue += A[N * i + k] * B[N * k + j];
-    }
-
-    C[N * i + j] = Cvalue;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    for (int e = 0; e < A.width; ++e)
+        Cvalue += A.elements[row * A.width + e]
+                * B.elements[e * B.width + col];
+    C.elements[row * C.width + col] = Cvalue;
 }
 
 
-// multiplicacion de matrices en CPU
-void productoMatricial(int* A, int* B, int* C, int N){
-
-    for(int i = 0; i < N ; i++){
-        for(int j = 0; j < N ; j++){
-            int column_row_sum = 0;
-            for(int k = 0; k < N; k++){
-                column_row_sum += A[N * i + k] * B[N * k + j];
-            }
-
-            C[N * i + j] = column_row_sum;
-        }
-    }
-
+// Matrix multiplication in cpu
+void MatMulcpu(Matrix A, Matrix B, Matrix C)
+{
+//TODO: completar para que C=A*B en la cpu
 }
 
+#define DIM	1024
+#define  IDX2C(i,j,ld) (((j)*(ld))+( i ))
 
-int main(){
-    int N = 4;
-    int* A = new int [N*N];
-    int* B = new int [N*N];
-    int* C = new int [N*N];
+int main(int argc, char **argv)
+{
+	//TODO: completar
+	// (1) alocar e inicializar A y B en host
+	// (2) chequear y cronometrar MatMul
+	// (3) chequear y cronometrar MatMulcpu
+	// (4) Comparar CPU vs GPU para distintos tamaños de matriz
 
-    for(int i = 0; i < N; i++){
-        for(int j = 0; j < N; j++){
-            A[N * i + j] =  N * i + j + 1; 
-
-            if (i == j) B[N * i + j] = -1; 
-            else  B[N * i + j] = 0;
-
-            C[N*i + j] = 0;
-
-        }
-    }  
-    productoMatricial(A, B, C, N);
-
-    delete [] A;
-    delete [] B;
-    delete [] C;
-    return 0;
+        return 0;
 }

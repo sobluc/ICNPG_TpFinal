@@ -4,6 +4,8 @@
 
 using namespace std;
 
+
+// Multiplicacion de matrices en GPU
 __global__ void productoMatricialKernel(int* A, int* B, int* C, int N){
 
     float Cvalue = 0;
@@ -17,7 +19,7 @@ __global__ void productoMatricialKernel(int* A, int* B, int* C, int N){
 }
 
 
-
+// multiplicacion de matrices en CPU
 void productoMatricial(int* A, int* B, int* C, int N){
 
     for(int i = 0; i < N ; i++){

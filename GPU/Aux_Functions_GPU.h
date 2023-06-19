@@ -5,158 +5,129 @@
 #include <ctime>
 #include <iostream>
 #include <cassert>
+
+// cuRand
+#include <curand.h>
+#include <curand_kernel.h>
+
+// thrust
+#include <thrust/reduce.h>
+#include <thrust/shuffle.h>
+#include <thrust/random.h>
+#include <thrust/device_vector.h>
+#include <thrust/functional.h>
+#include <thrust/execution_policy.h>
+
+
 using namespace std;
 
+unsigned int cuRand_seed = time(0);
 
-// Uso el ejemplo de MiniIsing para generar numeros aleatorios
 
-#include <Random123/philox.h> 
-#include <Random123/u01.h>    
-typedef r123::Philox2x32 RNG; 
-
-int globalseed=123456; // seed global del generador de números aleatorios en paralelo
-
-__device__
-float uniform(int n, int seed, int t)
-{ 
-		RNG philox; 	
-		RNG::ctr_type c={{}};
-		RNG::key_type k={{}};
-		RNG::ctr_type r;
-
-		k[0]=n;    
-		c[1]=seed; // seed global, necesario para decidir reproducir secuencia, o no...
-		c[0]=t;    // el seed tiene que cambiar con la iteracion, sino...
-		r = philox(c, k); // son dos numeros random, usaremos uno solo r[0]
-		return (u01_closed_closed_32_53(r[0])); // funcion adaptadora a [0,1]
-}
-
-__global__ 
-void node_initial_setting(int N, float gamma, int* nro_clique, bool* tiene_largo_alcance){
-    int i = blockIdx.x * blockDim.x + threadId.x;
+__global__ void node_initial_setting(int N, float gamma, unsigned int cuRand_seed,int* nro_clique, int* vecino_largo_alcance , int* tiene_largo_alcance){
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
     if(i < N){
-        nro_clique[i] = blockIdx;
-        float rand_num = uniform(n, seed, t); // misma funcion que en el ejemplo MiniIsing
-        tiene_largo_alcance[i] = uniform(n, seed, t) <= gamma;    
-    
-    }
-}
-
-
-// initial_setting_Kronecker genera el numero de clique de cada nodo, establece qué nodos van a tener enlace de largo alcance y 
-// asigna el enlace de largo alcance a -1 a todos los nodos. Retorna la cantidad de nodos con enlace de largo alcance.
-int initial_setting_Kronecker(int m, float gamma, int N, int* nro_clique, bool* tiene_largo_alcance, int* vecino_largo_alcance){
-    
-    // llamo a kernel con Q = N/m bloques y m threads por bloque
-    node_initial_setting<<< N/m , m >>>(nro_clique);
-
-
-    int count_largo_alcance = 0; // calcular la suma con thrust o alguna libreria    
-    for(int i = 0; i < N; i++){
-            
+        nro_clique[i] = blockIdx.x;
         vecino_largo_alcance[i] = -1;
 
-        float rand_num = ran_gen.doub();
-        if (rand_num <= gamma){
-            tiene_largo_alcance[i] = true;
-            count_largo_alcance++;
+        curandState_t state;
+        curand_init(cuRand_seed, i, 0, &state);
+        if(curand_uniform(&state) <= gamma){
+            tiene_largo_alcance[i] = 1;
         }
         else{
-            tiene_largo_alcance[i] = false;
+            tiene_largo_alcance[i] = 0;
         }
     }
+}
 
-    return count_largo_alcance;
+__global__ void copio_si_tiene_largo_alcance(int N, int* tiene_largo_alcance, int* aux_con_largo_alcance){
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if(i < N){
+        if(tiene_largo_alcance[i] == 1){
+            aux_con_largo_alcance[i] = i;
+        }
+        else{
+            aux_con_largo_alcance[i] = -1;
+        } 
+    }
+
 }
 
 
-
-
-
-// swap y shuffle son funciones que implementan el algoritmo de Fisher-Yates (https://es.wikipedia.org/wiki/Algoritmo_de_Fisher-Yates)
-void swap (int *a, int *b)
+struct has_external_edge
 {
-    int temp = *a;
-    *a = *b;
-    *b = temp;
-}
+  __host__ __device__
+  bool operator()(const int x)
+  {
+    return x != -1;
+  }
+};
 
-void shuffle (int* arr, int n)
-{
-    for (int i = n - 1; i > 0; i--)
-    {
-        int j = ran_gen.int64() % (i + 1);
-        swap(&arr[i], &arr[j]);
+
+__global__ void asigno_enlaces (int size, int* nodos_con_largo_alcance, int* vecino_largo_alcance, int* tiene_largo_alcance, int* nro_clique){
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if(i < size){
+        if(i % 2 == 0){
+            
+            if(i == size - 1){ // sirve si size es impar
+                int nodo = nodos_con_largo_alcance[i];
+                tiene_largo_alcance[nodo] = 0;
+                vecino_largo_alcance[nodo] = -1;
+            }
+            else{
+                int nodo0 = nodos_con_largo_alcance[i];
+                int nodo1 = nodos_con_largo_alcance[i + 1];
+
+                if(nro_clique[nodo0] != nro_clique[nodo1]){
+                    vecino_largo_alcance[nodo0] = nodo1;
+                    vecino_largo_alcance[nodo1] = nodo0;
+
+                }
+                else{
+                    tiene_largo_alcance[nodo0] = 0;
+                    tiene_largo_alcance[nodo1] = 1;
+
+                    vecino_largo_alcance[nodo0] = -1;
+                    vecino_largo_alcance[nodo1] = -1;
+                
+                }
+            }
+        }
     }
 }
+
 
 // asigno_largo_alcance asigna entre cuáles nodos va a existir un enlace de largo alcance
-void asigno_largo_alcance(int N, int cantidad_largo_alcance, int* nro_clique , bool* tiene_largo_alcance , int* vecino_largo_alcance){
-    // me quedo solo con los nodos que tienen largo alcance
-    int* nodos_con_largo_alcance = new int [cantidad_largo_alcance]; 
-    assert(nodos_con_largo_alcance != nullptr);
+void asigno_largo_alcance(int m, int N, int cantidad_largo_alcance, int* nro_clique , int* tiene_largo_alcance , int* vecino_largo_alcance){
+    int* aux_con_largo_alcance; 
+    cudaMalloc(&aux_con_largo_alcance, N * sizeof(int));    
 
-    int aux = 0;
-    for(int i = 0; i < N; i++){
-        if(tiene_largo_alcance[i]){
-            nodos_con_largo_alcance[aux] = i;
-            aux++;
-        }
-    }
+    copio_si_tiene_largo_alcance<<< N/m , m >>>(N, tiene_largo_alcance, aux_con_largo_alcance);
+
+    thrust::device_vector<int> nodos_con_largo_alcance (cantidad_largo_alcance);
+    thrust::copy_if(thrust::device, aux_con_largo_alcance, aux_con_largo_alcance + N, nodos_con_largo_alcance.begin(), has_external_edge());
+
+    cudaFree(aux_con_largo_alcance);
     
-    int cantidad_largo_alcance_reducido = cantidad_largo_alcance;
+    thrust::default_random_engine g;
+    thrust::shuffle(thrust::device, nodos_con_largo_alcance.begin(), nodos_con_largo_alcance.end(), g);
 
-    // mezclo la lista
-    shuffle(nodos_con_largo_alcance, cantidad_largo_alcance_reducido); 
-    
-    // uno nodos en diferentes cliques y los remuevo de la lista 
-    while(cantidad_largo_alcance_reducido > 0){
-        
-        int nodo0 = nodos_con_largo_alcance[0];
+    int* nodos_con_largo_alcance_raw_ptr = thrust::raw_pointer_cast(nodos_con_largo_alcance.data());
 
-        // me fijo que los nodos que quedan esten en cliques distintos
-        int clique0_num = nro_clique[nodo0];
-        int clique_count = nro_clique[nodo0];
-        int counter = 0;
-        while(clique_count == clique0_num){
-            
-            if(counter == cantidad_largo_alcance_reducido){ break; }
+    int* mezclado = new int [cantidad_largo_alcance];
 
-            clique_count = nro_clique[counter];   
-            counter++;
-        }
-
-        if(counter >= cantidad_largo_alcance_reducido){ 
-            for(int i = 0; i < cantidad_largo_alcance_reducido; i++){
-                int aux_nodo = nodos_con_largo_alcance[i];
-                tiene_largo_alcance[aux_nodo] = false;
-                vecino_largo_alcance[aux_nodo] = -1; 
-            }
-            break; 
-        }
-
-        int nodo1 = nodos_con_largo_alcance[1];
-
-        while((nro_clique[nodo0] == nro_clique[nodo1])){
-            shuffle(nodos_con_largo_alcance, cantidad_largo_alcance_reducido);
-            nodo0 = nodos_con_largo_alcance[0];
-            nodo1 = nodos_con_largo_alcance[1];
-        }
-
-        vecino_largo_alcance[nodo0] = nodo1;
-        vecino_largo_alcance[nodo1] = nodo0;
-
-        cantidad_largo_alcance_reducido -= 2;
-
-        // saco a los nodos de la lista
-        int* newArr = new int [cantidad_largo_alcance_reducido];
-        for(int i = 2; i < cantidad_largo_alcance_reducido + 2; i++){
-            newArr[i - 2] = nodos_con_largo_alcance[i]; 
-        }
-
-        delete [] nodos_con_largo_alcance;
-        nodos_con_largo_alcance = newArr;
+    cudaMemcpy(mezclado,  nodos_con_largo_alcance_raw_ptr , cantidad_largo_alcance * sizeof(int), cudaMemcpyDeviceToHost);
+    cout << endl << "mezclado : " << endl;
+    cout << "{";
+    for (size_t i = 0; i < cantidad_largo_alcance-1; ++i)
+    {
+        cout << mezclado[i] << ", ";
     }
+    cout << mezclado[cantidad_largo_alcance-1] << "}\n";
 
-    delete [] nodos_con_largo_alcance;
+    int threadsPerBlock = 256;
+    int totalBlocks = (cantidad_largo_alcance + (threadsPerBlock - 1))/threadsPerBlock;
+    asigno_enlaces<<< totalBlocks, threadsPerBlock, threadsPerBlock*sizeof(int)>>>(cantidad_largo_alcance, nodos_con_largo_alcance_raw_ptr, vecino_largo_alcance, tiene_largo_alcance, nro_clique);
+
 }

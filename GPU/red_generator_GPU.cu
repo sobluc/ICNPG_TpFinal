@@ -23,14 +23,17 @@ class Red_GPU{
             this -> N = Q * m; // cantidad de nodos en la red
             this -> clique_sizes = nullptr; // va a servir cuando los cliques cambien de tamaño
             cudaMalloc(&(this -> nro_clique), N * sizeof(int)); 
-            cudaMalloc(&(this -> tiene_largo_alcance), N * sizeof(bool));
+            cudaMalloc(&(this -> tiene_largo_alcance), N * sizeof(int));
             cudaMalloc(&(this -> vecino_largo_alcance), N* sizeof(int));
 
             // establezco los nodos que van a tener enlace de largo alcance y escribo el numero de clique de cada nodo
-            int count_largo_alcance = initial_setting_Kronecker(m, gamma, N, nro_clique, tiene_largo_alcance, vecino_largo_alcance); 
+            node_initial_setting<<< N/m , m >>>(N, gamma, cuRand_seed, nro_clique, vecino_largo_alcance, tiene_largo_alcance);
+
+            int cantidad_largo_alcance = thrust::reduce(thrust::device, tiene_largo_alcance, tiene_largo_alcance + N);
 
             // asigno vecinos de largo alcance
-            asigno_largo_alcance(N, count_largo_alcance, nro_clique, tiene_largo_alcance, vecino_largo_alcance);
+            asigno_largo_alcance(m, N, cantidad_largo_alcance, nro_clique, tiene_largo_alcance, vecino_largo_alcance);
+
 
         }
 
@@ -57,35 +60,43 @@ class Red_GPU{
         float gamma;
         int* clique_sizes; // por ahora va a ser nullptr porque trabajo con tamaño constante
         int* nro_clique; 
-        bool* tiene_largo_alcance;
+        int* tiene_largo_alcance;
         int* vecino_largo_alcance;
 };
 
 int main (){
 
-    int Q = 10;
+    int Q = 15;
     int m = 3;
     float gamma = 1.0;
     int N = Q * m;
 
     Red_GPU red_test (Q, gamma, m);
 
+    int* nro_clique_Host = new int [N]; 
+    int* tiene_largo_alcance_Host = new int [N];
+    int* vecino_largo_alcance_Host = new int [N];
+
+    cudaMemcpy(nro_clique_Host, red_test.nro_clique, N * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(tiene_largo_alcance_Host, red_test.tiene_largo_alcance, N * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(vecino_largo_alcance_Host, red_test.vecino_largo_alcance, N * sizeof(int), cudaMemcpyDeviceToHost);
+
     cout << endl << "numero de clique : " << endl;
     cout << "{";
     for (size_t i = 0; i < N-1; ++i)
     {
-        cout << red_test.nro_clique[i] << ", ";
+        cout << nro_clique_Host[i] << ", ";
     }
-    cout << red_test.nro_clique[N-1] << "}\n";
+    cout << nro_clique_Host[N-1] << "}\n";
 
     cout << endl << "largo alcance : " << endl;
  
     cout << "{";
     for (size_t i = 0; i < N-1; ++i)
     {
-        cout << red_test.tiene_largo_alcance[i] << ", ";
+        cout << tiene_largo_alcance_Host[i] << ", ";
     }
-    cout << red_test.tiene_largo_alcance[N-1] << "}\n";
+    cout << tiene_largo_alcance_Host[N-1] << "}\n";
 
 
     cout << endl << "vecinos largo alcance : " << endl;
@@ -93,10 +104,13 @@ int main (){
     cout << "{";
     for (size_t i = 0; i < N-1; ++i)
     {
-        cout << red_test.vecino_largo_alcance[i] << ", ";
+        cout << vecino_largo_alcance_Host[i] << ", ";
     }
-    cout << red_test.vecino_largo_alcance[N-1] << "}\n";
+    cout << vecino_largo_alcance_Host[N-1] << "}\n";
 
+    delete [] nro_clique_Host;
+    delete [] tiene_largo_alcance_Host;
+    delete [] vecino_largo_alcance_Host;
 
     return 0;
 }

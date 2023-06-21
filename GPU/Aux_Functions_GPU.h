@@ -100,34 +100,30 @@ __global__ void asigno_enlaces (int size, int* nodos_con_largo_alcance, int* vec
 
 // asigno_largo_alcance asigna entre cuáles nodos va a existir un enlace de largo alcance
 void asigno_largo_alcance(int m, int N, int cantidad_largo_alcance, int* nro_clique , int* tiene_largo_alcance , int* vecino_largo_alcance){
+    // establezco los nodos que tienen largo alcance
     int* aux_con_largo_alcance; 
     cudaMalloc(&aux_con_largo_alcance, N * sizeof(int));    
 
     copio_si_tiene_largo_alcance<<< N/m , m >>>(N, tiene_largo_alcance, aux_con_largo_alcance);
 
+    // me quedo con los nodos que tienen largo alcance
     thrust::device_vector<int> nodos_con_largo_alcance (cantidad_largo_alcance);
     thrust::copy_if(thrust::device, aux_con_largo_alcance, aux_con_largo_alcance + N, nodos_con_largo_alcance.begin(), has_external_edge());
-
     cudaFree(aux_con_largo_alcance);
     
+    int* nodos_con_largo_alcance_raw_ptr = thrust::raw_pointer_cast(nodos_con_largo_alcance.data());
+
+    // mezclo el vector 
     thrust::default_random_engine g;
     thrust::shuffle(thrust::device, nodos_con_largo_alcance.begin(), nodos_con_largo_alcance.end(), g);
 
-    int* nodos_con_largo_alcance_raw_ptr = thrust::raw_pointer_cast(nodos_con_largo_alcance.data());
-
-    int* mezclado = new int [cantidad_largo_alcance];
-
-    cudaMemcpy(mezclado,  nodos_con_largo_alcance_raw_ptr , cantidad_largo_alcance * sizeof(int), cudaMemcpyDeviceToHost);
-    cout << endl << "mezclado : " << endl;
-    cout << "{";
-    for (size_t i = 0; i < cantidad_largo_alcance-1; ++i)
-    {
-        cout << mezclado[i] << ", ";
-    }
-    cout << mezclado[cantidad_largo_alcance-1] << "}\n";
-
+    // asigno enlaces de largo alcance
     int threadsPerBlock = 256;
     int totalBlocks = (cantidad_largo_alcance + (threadsPerBlock - 1))/threadsPerBlock;
-    asigno_enlaces<<< totalBlocks, threadsPerBlock, threadsPerBlock*sizeof(int)>>>(cantidad_largo_alcance, nodos_con_largo_alcance_raw_ptr, vecino_largo_alcance, tiene_largo_alcance, nro_clique);
+    asigno_enlaces<<< totalBlocks, threadsPerBlock, threadsPerBlock*sizeof(int)>>>(cantidad_largo_alcance, 
+                                                                                    nodos_con_largo_alcance_raw_ptr, 
+                                                                                    vecino_largo_alcance, 
+                                                                                    tiene_largo_alcance, 
+                                                                                    nro_clique);
 
 }

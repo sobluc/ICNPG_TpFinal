@@ -1,17 +1,5 @@
-/* Idea preliminar de codigo en Cuda/C++:
-
-    Las redes estudiadas son redes compuestas por Q cliques (https://es.wikipedia.org/wiki/Clique) con tamaños n dados por una distribución de probabilidad fn. A su vez
-    cada nodo puede ser unido mediante un "enlace de largo alcance" con a lo sumo un nodo en otro clique.
-
-    La forma de representar la red va a ser con los siguientes arrays:
-
-    -> clique_sizes = [1,2,1,5,3,3, ...] -> vector del tamaño de cada clique (size = Q) (por ahora son solo tamaños iguales)
-    -> nro_clique = [0,1,1,2,3,3,3,3,3, ...] -> vector de nodos en donde cada elemento es el nro de clique al que pertenece (tiene tamaño N = sum(clique_sizes))
-    -> tiene_largo_alcance = [1,0,1,1,0, 0 , ...] -> vector que dice si el nodo tiene o no enlace de largo alcance
-    -> vecino_largo_alcance = [20,10,3,2,-1,...] -> vector en donde se guarda el numero de nodo al que esta conectado cada uno en otro clique (si es -1 no tiene enlace de largo alcance)
-
-*/
 #include "Aux_Functions_GPU.h"
+#include "cpu_timer.h"
 
 
 class Red_GPU{
@@ -33,8 +21,6 @@ class Red_GPU{
 
             // asigno vecinos de largo alcance
             asigno_largo_alcance(m, N, cantidad_largo_alcance, nro_clique, tiene_largo_alcance, vecino_largo_alcance);
-
-
         }
 
         ~Red_GPU(){
@@ -53,12 +39,11 @@ class Red_GPU{
         }
 
 
-    //private:
-        int Q; // cantidad de cliques
-        int n_max; // maximo tamaño que puede tener un clique
+        int Q; 
+        int n_max; 
         int N;
         float gamma;
-        int* clique_sizes; // por ahora va a ser nullptr porque trabajo con tamaño constante
+        int* clique_sizes;
         int* nro_clique; 
         int* tiene_largo_alcance;
         int* vecino_largo_alcance;
@@ -66,51 +51,60 @@ class Red_GPU{
 
 int main (){
 
-    int Q = 15;
+    // Asigno valores de Q (cantidad de cliques), m (tamaño de los cliques) y gamma (probabilidad de largo alcance)
+    int Q = 10;
     int m = 3;
     float gamma = 1.0;
-    int N = Q * m;
 
-    Red_GPU red_test (Q, gamma, m);
+    cout << "Q : " << Q << "| m : " << m << " | gamma : " << gamma << endl;
 
-    int* nro_clique_Host = new int [N]; 
-    int* tiene_largo_alcance_Host = new int [N];
-    int* vecino_largo_alcance_Host = new int [N];
+    cpu_timer relojcpu;
+    relojcpu.tic();
+    Red_GPU red_test (Q, gamma, m); // creo la red con su constructor
+    cout << relojcpu.tac() << endl;
 
-    cudaMemcpy(nro_clique_Host, red_test.nro_clique, N * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(tiene_largo_alcance_Host, red_test.tiene_largo_alcance, N * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(vecino_largo_alcance_Host, red_test.vecino_largo_alcance, N * sizeof(int), cudaMemcpyDeviceToHost);
+    // Las siguientes lineas comentadas son para ver los vectores de la red creada (se recomienda usar con redes chicas)
 
-    cout << endl << "numero de clique : " << endl;
-    cout << "{";
-    for (size_t i = 0; i < N-1; ++i)
-    {
-        cout << nro_clique_Host[i] << ", ";
-    }
-    cout << nro_clique_Host[N-1] << "}\n";
+    // int N = m*Q;
 
-    cout << endl << "largo alcance : " << endl;
+    // int* nro_clique_Host = new int [N]; 
+    // int* tiene_largo_alcance_Host = new int [N];
+    // int* vecino_largo_alcance_Host = new int [N];
+
+    // cudaMemcpy(nro_clique_Host, red_test.nro_clique, N * sizeof(int), cudaMemcpyDeviceToHost);
+    // cudaMemcpy(tiene_largo_alcance_Host, red_test.tiene_largo_alcance, N * sizeof(int), cudaMemcpyDeviceToHost);
+    // cudaMemcpy(vecino_largo_alcance_Host, red_test.vecino_largo_alcance, N * sizeof(int), cudaMemcpyDeviceToHost);
+
+    // cout << endl << "numero de clique : " << endl;
+    // cout << "{";
+    // for (size_t i = 0; i < N-1; ++i)
+    // {
+    //     cout << nro_clique_Host[i] << ", ";
+    // }
+    // cout << nro_clique_Host[N-1] << "}\n";
+
+    // cout << endl << "largo alcance : " << endl;
  
-    cout << "{";
-    for (size_t i = 0; i < N-1; ++i)
-    {
-        cout << tiene_largo_alcance_Host[i] << ", ";
-    }
-    cout << tiene_largo_alcance_Host[N-1] << "}\n";
+    // cout << "{";
+    // for (size_t i = 0; i < N-1; ++i)
+    // {
+    //     cout << tiene_largo_alcance_Host[i] << ", ";
+    // }
+    // cout << tiene_largo_alcance_Host[N-1] << "}\n";
 
 
-    cout << endl << "vecinos largo alcance : " << endl;
+    // cout << endl << "vecinos largo alcance : " << endl;
  
-    cout << "{";
-    for (size_t i = 0; i < N-1; ++i)
-    {
-        cout << vecino_largo_alcance_Host[i] << ", ";
-    }
-    cout << vecino_largo_alcance_Host[N-1] << "}\n";
+    // cout << "{";
+    // for (size_t i = 0; i < N-1; ++i)
+    // {
+    //     cout << vecino_largo_alcance_Host[i] << ", ";
+    // }
+    // cout << vecino_largo_alcance_Host[N-1] << "}\n";
 
-    delete [] nro_clique_Host;
-    delete [] tiene_largo_alcance_Host;
-    delete [] vecino_largo_alcance_Host;
+    // delete [] nro_clique_Host;
+    // delete [] tiene_largo_alcance_Host;
+    // delete [] vecino_largo_alcance_Host;
 
     return 0;
 }

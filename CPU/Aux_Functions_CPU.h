@@ -11,7 +11,6 @@ using namespace std;
 // Ran es un generador de números aleatorios implementado en el libro NUMERICAL RECIPES.
 struct Ran {
 
-
 	unsigned long long int u,v,w;
 	Ran(unsigned long long int j) : v(4101842887655102017LL), w(1) {
 		u = j ^ v; int64();
@@ -34,7 +33,7 @@ Ran ran_gen(time(0)); // Seed para los numeros aleatorios usando RAN de NUMERICA
 
 // initial_setting_Kronecker genera el numero de clique de cada nodo, establece qué nodos van a tener enlace de largo alcance y 
 // asigna el enlace de largo alcance a -1 a todos los nodos. Retorna la cantidad de nodos con enlace de largo alcance.
-int initial_setting_Kronecker(int m, float gamma, int N, int* nro_clique, bool* tiene_largo_alcance, int* vecino_largo_alcance){
+int initial_setting_Kronecker(int m, float gamma, int N, int* nro_clique, int* tiene_largo_alcance, int* vecino_largo_alcance){
 
     int clique_count = 0;            
     int count_largo_alcance = 0;    
@@ -49,17 +48,15 @@ int initial_setting_Kronecker(int m, float gamma, int N, int* nro_clique, bool* 
 
         float rand_num = ran_gen.doub();
         if (rand_num <= gamma){
-            tiene_largo_alcance[i] = true;
+            tiene_largo_alcance[i] = 1;
             count_largo_alcance++;
         }
         else{
-            tiene_largo_alcance[i] = false;
+            tiene_largo_alcance[i] = 0;
         }
     }
-
     return count_largo_alcance;
 }
-
 
 // swap y shuffle son funciones que implementan el algoritmo de Fisher-Yates (https://es.wikipedia.org/wiki/Algoritmo_de_Fisher-Yates)
 void swap (int *a, int *b)
@@ -68,7 +65,6 @@ void swap (int *a, int *b)
     *a = *b;
     *b = temp;
 }
-
 void shuffle (int* arr, int n)
 {
     for (int i = n - 1; i > 0; i--)
@@ -79,14 +75,14 @@ void shuffle (int* arr, int n)
 }
 
 // asigno_largo_alcance asigna entre cuáles nodos va a existir un enlace de largo alcance
-void asigno_largo_alcance(int N, int cantidad_largo_alcance, int* nro_clique , bool* tiene_largo_alcance , int* vecino_largo_alcance){
+void asigno_largo_alcance(int N, int cantidad_largo_alcance, int* nro_clique , int* tiene_largo_alcance , int* vecino_largo_alcance){
     // me quedo solo con los nodos que tienen largo alcance
     int* nodos_con_largo_alcance = new int [cantidad_largo_alcance]; 
     assert(nodos_con_largo_alcance != nullptr);
 
     int aux = 0;
     for(int i = 0; i < N; i++){
-        if(tiene_largo_alcance[i]){
+        if(tiene_largo_alcance[i] == 1){
             nodos_con_largo_alcance[aux] = i;
             aux++;
         }
@@ -99,7 +95,6 @@ void asigno_largo_alcance(int N, int cantidad_largo_alcance, int* nro_clique , b
     
     // uno nodos en diferentes cliques y los remuevo de la lista 
     while(cantidad_largo_alcance_reducido > 0){
-        
         int nodo0 = nodos_con_largo_alcance[0];
 
         // me fijo que los nodos que quedan esten en cliques distintos
@@ -113,7 +108,6 @@ void asigno_largo_alcance(int N, int cantidad_largo_alcance, int* nro_clique , b
             clique_count = nro_clique[counter];   
             counter++;
         }
-
         if(counter >= cantidad_largo_alcance_reducido){ 
             for(int i = 0; i < cantidad_largo_alcance_reducido; i++){
                 int aux_nodo = nodos_con_largo_alcance[i];
@@ -123,6 +117,7 @@ void asigno_largo_alcance(int N, int cantidad_largo_alcance, int* nro_clique , b
             break; 
         }
 
+        // elijo el nodo siguiente y los uno si no estan en el mismo clique
         int nodo1 = nodos_con_largo_alcance[1];
 
         while((nro_clique[nodo0] == nro_clique[nodo1])){
@@ -130,13 +125,12 @@ void asigno_largo_alcance(int N, int cantidad_largo_alcance, int* nro_clique , b
             nodo0 = nodos_con_largo_alcance[0];
             nodo1 = nodos_con_largo_alcance[1];
         }
-
         vecino_largo_alcance[nodo0] = nodo1;
         vecino_largo_alcance[nodo1] = nodo0;
-
+        
         cantidad_largo_alcance_reducido -= 2;
 
-        // saco a los nodos de la lista
+        // saco a los nodos nodo0 y nodo1
         int* newArr = new int [cantidad_largo_alcance_reducido];
         for(int i = 2; i < cantidad_largo_alcance_reducido + 2; i++){
             newArr[i - 2] = nodos_con_largo_alcance[i]; 
